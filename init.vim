@@ -25,6 +25,8 @@ Plug 'quangnguyen30192/cmp-nvim-ultisnips'
 Plug 'terrortylor/nvim-comment'
 
 Plug  'jiangmiao/auto-pairs'
+
+Plug 'evanleck/vim-svelte', {'branch': 'main'}
 call plug#end()
 
 set smarttab
@@ -146,6 +148,8 @@ end)
 
 local capabilities = require('cmp_nvim_lsp').update_capabilities(vim.lsp.protocol.make_client_capabilities())
 
+require('lspconfig').tsserver.setup({})
+require'lspconfig'.svelte.setup{}
 
 require('go').setup({
 	auto_format=true,
@@ -155,6 +159,12 @@ require('go').setup({
 	formatter='goimports',
 })
 require('lspconfig')['gopls'].setup {
+    capabilities = capabilities
+}
+require('lspconfig')['tsserver'].setup {
+    capabilities = capabilities
+}
+require('lspconfig')['svelte'].setup {
     capabilities = capabilities
 }
 require('lspconfig').gopls.setup({})
