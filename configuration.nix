@@ -8,6 +8,39 @@ let
   nvidia-offload = pkgs.writeShellScriptBin "nvidia-offload" ''
     __NV_PRIME_RENDER_OFFLOAD=1  __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0 __GLX_VENDOR_LIBRARY_NAME=nvidia  __VK_LAYER_NV_optimus=NVIDIA_only exec "$@"
   '';
+
+  # Sway
+  dbus-sway-environment = pkgs.writeTextFile {
+    name = "dbus-sway-environment";
+    destination = "/bin/dbus-sway-environment";
+    executable = true;
+
+    text = ''
+  dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
+  systemctl --user stop pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
+  systemctl --user start pipewire pipewire-media-session xdg-desktop-portal xdg-desktop-portal-wlr
+      '';
+  };
+
+  # currently, there is some friction between sway and gtk:
+  # https://github.com/swaywm/sway/wiki/GTK-3-settings-on-Wayland
+  # the suggested way to set gtk settings is with gsettings
+  # for gsettings to work, we need to tell it where the schemas are
+  # using the XDG_DATA_DIR environment variable
+  # run at the end of sway config
+  configure-gtk = pkgs.writeTextFile {
+      name = "configure-gtk";
+      destination = "/bin/configure-gtk";
+      executable = true;
+      text = let
+        schema = pkgs.gsettings-desktop-schemas;
+        datadir = "${schema}/share/gsettings-schemas/${schema.name}";
+      in ''
+        export XDG_DATA_DIRS=${datadir}:$XDG_DATA_DIRS
+        gnome_schema=org.gnome.desktop.interface
+        gsettings set $gnome_schema gtk-theme 'Dracula'
+        '';
+  };
 in
 {
   imports =
@@ -19,6 +52,9 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.loader.efi.efiSysMountPoint = "/boot/efi";
+
+  #kernel
+	boot.kernelPackages=pkgs.linuxPackages_zen;
 
   boot.supportedFilesystems = [ "ntfs" ];
 
@@ -60,8 +96,13 @@ in
 
   services.xserver.videoDrivers = [ "nvidia" ];
   # hardware.opengl.enable = true;
+  hardware.nvidia.modesetting.enable = true;
+	hardware.nvidia.powerManagement.enable = true;
+
+
   hardware.nvidia.prime = {
     offload.enable = true;
+
 
     # Bus ID of the Intel GPU. You can find it using lspci, either under 3D or VGA
     intelBusId = "PCI:0:2:0";
@@ -97,6 +138,11 @@ in
     #media-session.enable = true;
   };
 
+  # fonts
+  fonts.fonts = with pkgs; [
+    (nerdfonts.override { fonts = [ "FiraCode" "DroidSansMono" ]; })
+  ];
+
 
 #Enable homemanager
 #  programs.home-manager.enable = true;
@@ -105,16 +151,43 @@ in
 
 #enable flatpak
   services.flatpak.enable = true;
+  # steam
+   programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
+  };
 
-# xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+
+# zsh
+  programs.zsh.enable = true;
+
+#also sway
+services.dbus.enable=true;
+#xdg.portal = {
+#    enable = true;
+#    wlr.enable = true;
+#    # gtk portal needed to make gtk apps happy
+#    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+#    gtkUsePortal = true;
+#  };
+ #xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
   # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
+   services.xserver.libinput.enable = true;
+
+   #enable sway
+   programs.sway = {
+	enable=true;
+	wrapperFeatures.gtk = true;
+   };
+
+   programs.light.enable = true;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.me = {
     isNormalUser = true;
+    shell=pkgs.zsh;
     description = "Aman";
-    extraGroups = [ "networkmanager" "wheel" "power" "storage" "adbusers" ];
+    extraGroups = [ "networkmanager" "wheel" "power" "storage" "adbusers" "video" ];
     packages = with pkgs; [
       firefox
 spotify
@@ -139,6 +212,27 @@ htop
 git
 mpv
 nvidia-offload
+tmux
+yt-dlp
+
+(steam.override {
+       withPrimus = true;
+       extraPkgs = pkgs: [ glxinfo ];
+    }).run
+
+#sway
+sway
+wofi
+alacritty
+glib
+dracula-theme
+swaylock
+swayidle
+grim
+slurp
+wl-clipboard
+mako
+waybar
   ];
 
 
